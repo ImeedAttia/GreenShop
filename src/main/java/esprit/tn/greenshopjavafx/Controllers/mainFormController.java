@@ -1,5 +1,7 @@
 package esprit.tn.greenshopjavafx.Controllers;
 import esprit.tn.greenshopjavafx.Entities.Fournisseur.Fournisseur;
+import esprit.tn.greenshopjavafx.Entities.GestionStock.Stock;
+import esprit.tn.greenshopjavafx.Entities.GestionStock.categorie;
 import esprit.tn.greenshopjavafx.Entities.Panier.Commande;
 import esprit.tn.greenshopjavafx.Entities.Panier.PanierProduit;
 import esprit.tn.greenshopjavafx.Entities.Produit.Marque;
@@ -9,6 +11,7 @@ import esprit.tn.greenshopjavafx.Services.FournisseurService.FournisseurService;
 import esprit.tn.greenshopjavafx.Services.ProduitService.MarqueService;
 import esprit.tn.greenshopjavafx.Services.ProduitService.ProduitService;
 
+import esprit.tn.greenshopjavafx.Services.StockService.ServiceStock;
 import esprit.tn.greenshopjavafx.Services.UtilisateurService.ServiceUtilisateur;
 import esprit.tn.greenshopjavafx.Services.panierService.CommandeService;
 import esprit.tn.greenshopjavafx.Utils.DataSource;
@@ -44,6 +47,7 @@ import java.util.*;
 import java.util.Date;
 import java.util.stream.Collectors;
 
+import javafx.util.StringConverter;
 import net.sf.jasperreports.engine.JasperCompileManager;
 import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
@@ -588,7 +592,6 @@ public class mainFormController implements Initializable {
             throw new RuntimeException(e);
         }
 
-        inventory_col_productID.setCellValueFactory(new PropertyValueFactory<>("id"));
         inventory_col_productName.setCellValueFactory(new PropertyValueFactory<>("nom"));
         inventory_col_prix.setCellValueFactory(new PropertyValueFactory<>("prix"));
         inventory_col_stock.setCellValueFactory(new PropertyValueFactory<>("stock"));
@@ -977,7 +980,6 @@ public class mainFormController implements Initializable {
 
     //Fournisseur
     private void configureTableViewColumns() {
-        fournisseur_col_id.setCellValueFactory(new PropertyValueFactory<>("id"));
         fournisseur_col_nom.setCellValueFactory(new PropertyValueFactory<>("nom"));
         fournisseur_col_prenom.setCellValueFactory(new PropertyValueFactory<>("prenom"));
         fournisseur_col_email.setCellValueFactory(new PropertyValueFactory<>("email"));
@@ -1149,7 +1151,398 @@ public class mainFormController implements Initializable {
     //End Fournisseur
 
 
+    //Stock///////////////////Omaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaar////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Stock///////////////////Omaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaar////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Stock////////////////////////////////////////Omarrrrrrrrrrrrrrrrrrrrrrrrrrrrr//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    @FXML
+    private TableView<Stock> stock_tableView;
+    @FXML
+    private TableColumn<Stock, Integer> stock_col_id;
+    @FXML
+    private TableColumn<Stock, String> stock_col_nom;
+    @FXML
+    private TableColumn<Stock, String> stock_col_marque;
+    @FXML
+    private TableColumn<Stock, String> stock_col_categorie;
+
+
+    @FXML
+    private TableColumn<Stock, Double> stock_col_prix;
+    @FXML
+    private TableColumn<Stock, Integer> stock_col_quantite;
+
+    @FXML
+    private TableColumn<Stock, Integer> stock_col_note;
+    @FXML
+    private TableColumn<Stock, Integer> stock_col_produit_id;
+
+    @FXML
+    Button addButtonStock;
+    @FXML
+    private ComboBox<Produit> produitComboBox;
+
+
+    private ServiceStock serviceStock = new ServiceStock();
+    private ProduitService serviceProduit = new ProduitService();
+
+    @FXML
+    private TextField quantiteTextField;
+
+    @FXML
+    private TextField nomTextField2, marqueTextField, prixTextField, noteTextField, produitIdTextField;
+
+    @FXML
+    private ComboBox<categorie> categorieComboBox;
+
+    private void refreshTableViewOmar() {
+        try {
+            ArrayList<Stock> stocks = serviceStock.readAll();
+            ObservableList<Stock> data = FXCollections.observableArrayList(stocks);
+            stock_tableView.setItems(data); // Met à jour les données dans la TableView
+            stock_tableView.refresh(); // Actualise la TableView
+
+            // Debug statement to print the size of the TableView items
+            System.out.println("Number of items in TableView: " + stock_tableView.getItems().size());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private void setupProduitComboBox() throws SQLException {
+        List<Produit> produits = serviceProduit.readAll();
+
+        // Utilisez un mapper pour afficher uniquement le nom du produit dans la ComboBox
+        produitComboBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Produit produit) {
+                return produit != null ? produit.getNom() : "";
+            }
+
+            @Override
+            public Produit fromString(String string) {
+                // Conversion non nécessaire pour une ComboBox non-éditable
+                return null;
+            }
+        });
+
+        produitComboBox.getItems().setAll(produits);
+
+        // Mettez à jour les champs marque et prix lorsque le produit sélectionné change
+        produitComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue != null) {
+                // newValue est maintenant le Produit sélectionné
+                prixTextField.setText(String.valueOf(newValue.getPrix()));
+            }
+        });
+    }
+
+
+
+    private void setupAddButtonStock() {
+        addButtonStock.setOnAction(e -> {
+            addStockFromInputFields();
+            refreshTableViewOmar(); // Rafraîchir la TableView après l'ajout
+        });
+    }
+
+    private boolean isValidInputOmar() {
+        // Check if the ComboBox has a selected value and if the text field is not empty
+        return produitComboBox.getValue() != null
+                && !quantiteTextField.getText().isEmpty()
+                && categorieComboBox.getValue() != null; // Use getValue() for ComboBox
+    }
+
+    private void resetInputFields() {
+        produitComboBox.getSelectionModel().clearSelection();
+        categorieComboBox.getSelectionModel().clearSelection(); // Clear selection for ComboBox
+        quantiteTextField.clear();
+    }
+
+
+
+    private void addStockFromInputFields() {
+        if (!isValidInputOmar()) {
+            // Display a JavaFX alert to indicate that all fields must be filled
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Champs manquants");
+            alert.setHeaderText(null);
+            alert.setContentText("Veuillez remplir tous les champs.");
+            alert.showAndWait();
+            return;
+        }
+
+        try {
+            // Create a new Stock object with user interface data
+            Stock newStock = new Stock();
+
+            // Get the selected product from the ComboBox
+            Produit produit = produitComboBox.getSelectionModel().getSelectedItem();
+            newStock.setNom(produit.getNom());
+            newStock.setMarque(produit.getMarque().getNom());
+            newStock.setPrix(produit.getPrix());
+            newStock.setIdProduit(produit.getId());
+
+            // Get the selected category from the ComboBox
+            categorie selectedCategorie = categorieComboBox.getValue();
+            if (selectedCategorie != null) {
+                newStock.setCategorie(selectedCategorie);
+            } else {
+
+            }
+
+            // Set the quantity from the input field
+            newStock.setQuantite(Integer.parseInt(quantiteTextField.getText()));
+
+            // Call the ajouter method of your service to add the new stock
+            serviceStock.ajouter(newStock);
+
+            // Update the TableView to display the new stock
+            refreshTableViewOmar();
+
+            // Reset the input fields after the addition
+            resetInputFields();
+
+            // Display a success message
+            Alert successAlert = new Alert(Alert.AlertType.INFORMATION);
+            successAlert.setTitle("Stock ajouté avec succès");
+            successAlert.setHeaderText(null);
+            successAlert.setContentText("Le stock a été ajouté avec succès.");
+            successAlert.showAndWait();
+            quantiteTextField.clear();
+            categorieComboBox.getSelectionModel().clearSelection();
+        } catch (SQLException | NumberFormatException e) {
+            e.printStackTrace();
+
+            // Display an error message
+            Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+            errorAlert.setTitle("Erreur lors de l'ajout du stock");
+            errorAlert.setHeaderText(null);
+            errorAlert.setContentText("Une erreur s'est produite lors de l'ajout du stock.");
+            errorAlert.showAndWait();
+        }
+    }
+
+
+
+    @FXML
+    private void deleteStock(ActionEvent event) {
+        Stock selectedStock = stock_tableView.getSelectionModel().getSelectedItem();
+
+        if (selectedStock == null) {
+            // Display a JavaFX alert to indicate that a stock must be selected
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Aucun stock sélectionné");
+            alert.setHeaderText(null);
+            alert.setContentText("Veuillez sélectionner un stock à supprimer.");
+            alert.showAndWait();
+            return;
+        }
+
+        Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmAlert.setTitle("Confirmation de suppression");
+        confirmAlert.setHeaderText(null);
+        confirmAlert.setContentText("Voulez-vous vraiment supprimer ce stock ?");
+
+        Optional<ButtonType> result = confirmAlert.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            try {
+                serviceStock.delete(selectedStock.getId());
+                refreshTableViewOmar(); // Refresh the TableView after deletion
+
+                // Display a success message
+                Alert successAlert = new Alert(Alert.AlertType.INFORMATION);
+                successAlert.setTitle("Stock supprimé avec succès");
+                successAlert.setHeaderText(null);
+                successAlert.setContentText("Le stock a été supprimé avec succès.");
+                successAlert.showAndWait();
+            } catch (SQLException e) {
+                e.printStackTrace();
+
+                // Display an error message
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                errorAlert.setTitle("Erreur lors de la suppression du stock");
+                errorAlert.setHeaderText(null);
+                errorAlert.setContentText("Une erreur s'est produite lors de la suppression du stock.");
+                errorAlert.showAndWait();
+            }
+        }
+    }
+
+
+    @FXML
+    private void modifyStock() {
+        Stock selectedStock = stock_tableView.getSelectionModel().getSelectedItem();
+
+        if (selectedStock == null) {
+            // Display a JavaFX alert to indicate that a stock must be selected
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Pas de stock sélectionné");
+            alert.setHeaderText(null);
+            alert.setContentText("Veuillez sélectionner un stock.");
+            alert.showAndWait();
+            return;
+        }
+
+        categorie newCategorie = categorieComboBox.getValue(); // Get selected category from ComboBox
+        String newQuantityText = quantiteTextField.getText();
+
+        if (newCategorie != null) {
+            selectedStock.setCategorie(newCategorie);
+        }
+
+        if (!newQuantityText.isEmpty()) {
+            try {
+                int newQuantity = Integer.parseInt(newQuantityText);
+                selectedStock.setQuantite(newQuantity);
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // Confirm with the user before updating the stock
+        Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
+        confirmAlert.setTitle("Confirmation de modification");
+        confirmAlert.setHeaderText(null);
+        confirmAlert.setContentText("Voulez-vous vraiment modifier ce stock ?");
+
+        Optional<ButtonType> result = confirmAlert.showAndWait();
+
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            try {
+                // Call the update method of your service to update the stock
+                serviceStock.update(selectedStock);
+                refreshTableViewOmar(); // Refresh the TableView after the update
+
+                // Display a success message
+                Alert successAlert = new Alert(Alert.AlertType.INFORMATION);
+                successAlert.setTitle("Stock modifié avec succès");
+                successAlert.setHeaderText(null);
+                successAlert.setContentText("Le stock a été modifié avec succès.");
+                successAlert.showAndWait();
+                // Clear input fields after the update
+                quantiteTextField.clear();
+                categorieComboBox.getSelectionModel().clearSelection();
+            } catch (SQLException e) {
+                e.printStackTrace();
+
+                // Display an error message
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                errorAlert.setTitle("Erreur lors de la modification du stock");
+                errorAlert.setHeaderText(null);
+                errorAlert.setContentText("Une erreur s'est produite lors de la modification du stock.");
+                errorAlert.showAndWait();
+            }
+        }
+    }
+
+
+
+    @FXML
+    private TextField rechercheMarqueTextField;
+
+
+
+
+    // Créez une variable pour stocker les données d'origine
+    private ObservableList<Stock> originalStockData;
+    @FXML
+    private ComboBox<categorie> categorieComboBoxSearch;
+
+
+
+    // Modifiez votre méthode de recherche
+    @FXML
+    private void rechercheParMarqueEtCategorie() {
+        String marque = rechercheMarqueTextField.getText();
+
+        try {
+            ServiceStock serviceStock = new ServiceStock();
+
+            // Get the selected category from the ComboBox
+            categorie selectedCategory = categorieComboBoxSearch.getValue();
+
+            // Search by both marque and category or only by marque or only by category
+            ArrayList<Stock> stocksTrouves = new ArrayList<>();
+
+            if (!marque.isEmpty() && selectedCategory != null) {
+                // Search by both marque and category
+                stocksTrouves = serviceStock.chercherProduitParMarqueEtCategorie(marque, selectedCategory);
+            } else if (!marque.isEmpty()) {
+                // Search only by marque
+                stocksTrouves = serviceStock.chercherProduitParMarque(marque);
+            } else if (selectedCategory != null) {
+                // Search only by category
+                stocksTrouves = serviceStock.chercherProduitParCategorie(String.valueOf(selectedCategory));
+            } else {
+                // No search criteria provided, handle accordingly (e.g., display a message)
+                System.out.println("Veuillez fournir des critères de recherche.");
+                return;
+            }
+
+            // Filter the results to include those with a matching category or matching marque
+            stocksTrouves = stocksTrouves.stream()
+                    .filter(stock -> (selectedCategory == null || stock.getCategorie() == selectedCategory)
+                            && (marque.isEmpty() || stock.getMarque().equalsIgnoreCase(marque)))
+                    .collect(Collectors.toCollection(ArrayList::new));
+
+            System.out.println("Number of results: " + stocksTrouves.size());
+
+            stock_tableView.getItems().clear(); // Clear the current content
+            stock_tableView.getItems().addAll(stocksTrouves); // Display the filtered results
+
+            // Clear input fields after the search
+            rechercheMarqueTextField.clear();
+            categorieComboBoxSearch.getSelectionModel().clearSelection();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            // Handle the exception (e.g., display an error message)
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+    // Ajoutez une méthode pour restaurer les données d'origine
+    private void restoreOriginalStockData() {
+        stock_tableView.getItems().clear();
+        stock_tableView.getItems().addAll(originalStockData);
+    }
+
+
+
+
+    @FXML
+    private void refreshButtonClicked() {
+        restoreOriginalStockData(); // Appel à la méthode pour restaurer les données d'origine
+    }
+
+    private ObservableList<categorie> getAllCategories() {
+        // This method could fetch categories from your data source or provide some predefined values
+        return FXCollections.observableArrayList(categorie.values());
+    }
+
+
+
+
+
+
+
+
+
+
+    //Stock///////////////////Omaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaar////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Stock///////////////////Omaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaar////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Stock///////////////////Omaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaar////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
     public void switchForm(ActionEvent event) {
@@ -1190,9 +1583,9 @@ public class mainFormController implements Initializable {
             dashboard_form.setVisible(false);
             inventory_form.setVisible(false);
             menu_form.setVisible(false);
-
             stock_form.setVisible(true);
             fournisseurs_form.setVisible(false);
+            refreshTableViewOmar();
 
         }
         else if (event.getSource() == fournisseur_btn) {
@@ -1281,6 +1674,44 @@ public class mainFormController implements Initializable {
         configureTableViewColumns();
         refreshTableView();
         searchButton.setOnAction(e -> handleRechercherFournisseur(null));
-    }
 
+
+        /////omarrrrr/////////////////////////////////
+
+        setupAddButtonStock();
+        try {
+            setupProduitComboBox();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        /////////////// Stock form /////////////////////////////////////////////////
+        stock_col_nom.setCellValueFactory(new PropertyValueFactory<>("nom"));
+        stock_col_marque.setCellValueFactory(new PropertyValueFactory<>("marque"));
+        stock_col_categorie.setCellValueFactory(new PropertyValueFactory<>("categorie"));
+        stock_col_prix.setCellValueFactory(new PropertyValueFactory<>("prix"));
+        stock_col_quantite.setCellValueFactory(new PropertyValueFactory<>("quantite"));
+        /////////////// Stock form /////////////////////////////////////////////////
+
+
+
+        refreshTableViewOmar();
+        originalStockData = FXCollections.observableArrayList();
+        originalStockData.addAll(stock_tableView.getItems());
+        stock_tableView.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            if (newSelection != null) {
+                // Récupérez le stock sélectionné
+                Stock selectedStock = stock_tableView.getSelectionModel().getSelectedItem();
+
+                // Mettez à jour les champs du formulaire avec les informations du stock sélectionné
+                categorieComboBox.getSelectionModel().select(selectedStock.getCategorie());
+                quantiteTextField.setText(String.valueOf(selectedStock.getQuantite()));
+            }
+        });
+
+        ObservableList<categorie> categories = FXCollections.observableArrayList(getAllCategories());
+        categorieComboBox.setItems(categories);
+        categorieComboBoxSearch.setItems(categories);
+
+
+    }
 }
